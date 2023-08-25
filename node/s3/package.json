@@ -1,0 +1,25 @@
+{
+  "name": "s3",
+  "version": "1.0.0",
+  "description": "s3 tutorial",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "build": "tsx esbuild.config.ts",
+    "dev": "tsx src/index.ts",
+    "s3rver": "s3rver -d s3rver_data"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^18.14.2",
+    "esbuild": "^0.19.2",
+    "s3rver": "^2.2.9",
+    "tsx": "^3.12.7"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.279.0",
+    "@aws-sdk/s3-request-presigner": "^3.398.0"
+  }
+}
