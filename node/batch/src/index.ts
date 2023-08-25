@@ -100,13 +100,17 @@ const runAll = async (): Promise<void> => {
       ],
     },
   };
+  // キューへのジョブの送信
   console.log("SubmitJobRequest:");
   const response = await submitJobRequest(input);
   if (!response || !response.jobId) return;
+  // 送信したジョブ情報の取得
   console.log("DescribeJobsCommand:");
   await describeJobsCommand([response.jobId]);
+  // キューに格納されたジョブの取得
   console.log("ListJobsCommand");
   await listJobsCommand(jobQueue);
+  // 送信したジョブのキャンセル
   console.log("CancelJobCommand:");
   await cancelJobCommand(response.jobId);
 };
