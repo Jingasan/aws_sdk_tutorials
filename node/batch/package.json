@@ -14,7 +14,6 @@
   "devDependencies": {
     "@types/node": "^18.14.2",
     "esbuild": "^0.19.2",
-    "s3rver": "^2.2.9",
     "tsx": "^3.12.7"
   },
   "dependencies": {
