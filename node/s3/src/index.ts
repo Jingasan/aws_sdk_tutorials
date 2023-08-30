@@ -31,24 +31,10 @@ const runCreateBucket = async (bucketName: string): Promise<boolean> => {
 };
 
 // S3バケットへのBucket Policyの適用
-const runPutBucketPolicy = async (bucketName: string): Promise<boolean> => {
+const runPutBucketPolicy = async (
+  putBucketPolicyParam: S3.PutBucketPolicyCommandInput
+): Promise<boolean> => {
   try {
-    const bucketPolicy = {
-      Version: "2012-10-17",
-      Statement: [
-        {
-          Sid: "sample-bucket-policy",
-          Effect: "Allow",
-          Principal: { AWS: "*" },
-          Action: ["s3:GetObject", "s3:PutObject"],
-          Resource: [`arn:aws:s3:::${bucketName}/*`],
-        },
-      ],
-    };
-    const putBucketPolicyParam: S3.PutBucketPolicyCommandInput = {
-      Bucket: bucketName,
-      Policy: JSON.stringify(bucketPolicy),
-    };
     const res = await s3client.send(
       new S3.PutBucketPolicyCommand(putBucketPolicyParam)
     );
@@ -61,23 +47,10 @@ const runPutBucketPolicy = async (bucketName: string): Promise<boolean> => {
 };
 
 // S3バケットへのCORSの設定
-const runPutBucketCORS = async (bucketName: string): Promise<boolean> => {
+const runPutBucketCORS = async (
+  putBucketCORSParam: S3.PutBucketCorsCommandInput
+): Promise<boolean> => {
   try {
-    const putBucketCORSParam: S3.PutBucketCorsCommandInput = {
-      Bucket: bucketName,
-      CORSConfiguration: {
-        CORSRules: [
-          {
-            ID: "Sample-Bucket-CORS",
-            AllowedHeaders: ["*"],
-            AllowedMethods: ["GET", "PUT"],
-            AllowedOrigins: ["*"],
-            ExposeHeaders: [],
-            MaxAgeSeconds: Number("int"),
-          },
-        ],
-      },
-    };
     const res = await s3client.send(
       new S3.PutBucketCorsCommand(putBucketCORSParam)
     );
@@ -266,11 +239,41 @@ const runAll = async () => {
 
   // S3バケットへのBucket Policyの適用
   console.log(">>> Put bucket policy");
-  await runPutBucketPolicy(bucketName);
+  const putBucketPolicyParam: S3.PutBucketPolicyCommandInput = {
+    Bucket: bucketName,
+    Policy: JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "sample-bucket-policy",
+          Effect: "Allow",
+          Principal: { AWS: "*" },
+          Action: ["s3:GetObject", "s3:PutObject"],
+          Resource: [`arn:aws:s3:::${bucketName}/*`],
+        },
+      ],
+    }),
+  };
+  await runPutBucketPolicy(putBucketPolicyParam);
 
   // S3バケットへのCORSの適用
   console.log(">>> Put bucket CORS");
-  await runPutBucketCORS(bucketName);
+  const putBucketCORSParam: S3.PutBucketCorsCommandInput = {
+    Bucket: bucketName,
+    CORSConfiguration: {
+      CORSRules: [
+        {
+          ID: "Sample-Bucket-CORS",
+          AllowedHeaders: ["*"],
+          AllowedMethods: ["GET", "PUT"],
+          AllowedOrigins: ["*"],
+          ExposeHeaders: [],
+          MaxAgeSeconds: Number("int"),
+        },
+      ],
+    },
+  };
+  await runPutBucketCORS(putBucketCORSParam);
 
   // S3バケット一覧の取得
   console.log(">>> List buckets");
