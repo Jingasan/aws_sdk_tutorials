@@ -268,7 +268,7 @@ const runAll = async () => {
           AllowedMethods: ["GET", "PUT"],
           AllowedOrigins: ["*"],
           ExposeHeaders: [],
-          MaxAgeSeconds: Number("int"),
+          MaxAgeSeconds: 3000,
         },
       ],
     },
