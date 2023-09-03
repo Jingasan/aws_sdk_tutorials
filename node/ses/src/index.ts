@@ -20,7 +20,7 @@ const sendEmailCommand = async (
 const runAll = async (): Promise<void> => {
   // メールコンテンツ
   const mailContent: SES.SendEmailCommandInput = {
-    FromEmailAddress: "from@gmail.com",
+    FromEmailAddress: "from@gmail.com", // 事前にSESの設定をしておくこと
     Destination: {
       ToAddresses: ["to@gmail.com"],
       CcAddresses: [],
