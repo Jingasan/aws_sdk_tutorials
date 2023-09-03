@@ -1,5 +1,5 @@
 import * as S3 from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import * as S3RequestPresigner from "@aws-sdk/s3-request-presigner";
 import * as fs from "fs";
 
 // 接続先設定（S3のMockであるs3rverを利用）
@@ -180,7 +180,7 @@ const runGetPresignedURL = async (
       Key: key,
       Body: JSON.stringify(json),
     };
-    const url = await getSignedUrl(
+    const url = await S3RequestPresigner.getSignedUrl(
       s3client,
       new S3.PutObjectCommand(putObjectParam),
       {
