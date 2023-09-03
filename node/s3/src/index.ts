@@ -135,9 +135,13 @@ const runUploadFile = async (bucketName: string): Promise<boolean> => {
 };
 
 // S3バケットのオブジェクト一覧取得(1000件以上)
-const runListObjects = async (bucketName: string): Promise<string[]> => {
+const runListObjects = async (
+  bucketName: string,
+  prefix: string
+): Promise<string[]> => {
   const listObjectsParam: S3.ListObjectsCommandInput = {
     Bucket: bucketName,
+    Prefix: prefix,
   };
   let truncated: boolean | undefined = true;
   let pageMarker;
@@ -294,7 +298,7 @@ const runAll = async () => {
 
   // S3バケットのオブジェクト一覧取得(1000件以上)
   console.log(">>> List objects");
-  const filelist = await runListObjects(bucketName);
+  const filelist = await runListObjects(bucketName, "");
 
   // PresignedURLの取得
   console.log(">>> Get presigned URL");
