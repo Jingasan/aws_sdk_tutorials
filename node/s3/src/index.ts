@@ -144,7 +144,7 @@ const runListObjects = async (
     Prefix: prefix,
   };
   let truncated: boolean | undefined = true;
-  let pageMarker;
+  let pageMarker: string | undefined;
   let filelist: string[] = [];
   while (truncated) {
     try {
