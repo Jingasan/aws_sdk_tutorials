@@ -45,8 +45,20 @@ const createUserPool = async (
     },
     // 管理者によるユーザー作成の設定
     AdminCreateUserConfig: {
-      // true:ユーザーによるサインアップを有効化/false:管理者によるユーザー作成のみ許可
+      // true:管理者によるユーザー作成のみ許可/false:ユーザー自身による作成も許可
       AllowAdminCreateUserOnly: false,
+      // 管理者によるユーザー作成時に送信する招待メールのテンプレート
+      InviteMessageTemplate: {
+        // メールタイトル
+        EmailSubject: "Your sign-in information",
+        // メール本文
+        EmailMessage:
+          "Your username is {username} and temporary password is {####}.",
+        // SMSメッセージ
+        SMSMessage:
+          "Your username is {username} and temporary password is {####}.",
+      },
+      UnusedAccountValidityDays: 7,
     },
     // 追加のカスタム属性(最大50個まで)
     Schema: [
@@ -68,7 +80,7 @@ const createUserPool = async (
         },
       },
     ],
-    // ユーザーのConfirm(確認)方法
+    // ユーザーの検証(Confirm)方法
     AutoVerifiedAttributes: [Cognito.VerifiedAttributeType.EMAIL],
     // メッセージ送信設定
     EmailConfiguration: {
@@ -82,8 +94,27 @@ const createUserPool = async (
       // 更新するために認証が必要な属性
       AttributesRequireVerificationBeforeUpdate: ["email"],
     },
-    // 認証メールのタイトル
-    EmailVerificationSubject: "認証コード",
+
+    EmailVerificationSubject: "Verify your email address",
+    //
+    EmailVerificationMessage: "Your verification code is {####}.",
+    // 検証メッセージのテンプレート
+    VerificationMessageTemplate: {
+      // 検証オプション
+      // CONFIRM_WITH_CODE:検証コードに検証
+      // CONFIRM_WITH_LINK:検証用リンク押下による検証
+      DefaultEmailOption: Cognito.DefaultEmailOptionType.CONFIRM_WITH_CODE,
+      // 検証コード送信メールのタイトル(検証コードによる検証の場合)
+      EmailSubject: "Here is your confirmation code",
+      // 検証コード送信メールの本文(検証コードによる検証の場合)
+      EmailMessage: "Your confirmation code is {####}",
+      // 検証コード送信メールのタイトル(検証用リンク押下による検証の場合)
+      EmailSubjectByLink: "Here is your confirmation link",
+      // 検証コード送信メールの本文(検証用リンク押下による検証の場合)
+      EmailMessageByLink: "Choose this link to {##verify your email##}",
+      // 検証コード送信SMSの本文
+      SmsMessage: "Your confirmation code is {####}",
+    },
     // ユーザープールのアドオン設定
     UserPoolAddOns: {
       // 高度なセキュリティ設定(OFF/AUDIT/ENFORCED)
@@ -283,7 +314,7 @@ const signUp = async (
 };
 
 /**
- * 管理者による確認コードなしでのサインアップ確認(Confirm)
+ * 管理者による検証コードなしでのサインアップ検証(Confirm)
  * @param userPoolId ユーザープールID
  * @param email メールアドレス(ユーザー名として利用)
  * @returns true:成功/false:失敗
@@ -306,7 +337,7 @@ const adminConfirmSignUp = async (
 };
 
 /**
- * ユーザーによるサインアップ確認(Confirm)
+ * ユーザーによるサインアップ検証(Confirm)
  * @param userPoolClientId アプリケーションクライアントのID
  * @param email メールアドレス(ユーザー名として利用)
  * @param confirmationCode Confirm Code
@@ -539,11 +570,11 @@ const adminResetUserPassword = async (
 };
 
 /**
- * パスワード忘却時の新しいパスワードの設定と確認(Confirm)
+ * パスワード忘却時の新しいパスワードの設定と検証(Confirm)
  * @param userPoolId ユーザープールID
  * @param email 削除対象のメールアドレス(ユーザー名として利用)
  * @param password 新しいパスワード
- * @param confirmationCode 確認コード
+ * @param confirmationCode 検証コード
  * @returns true:成功/false:失敗
  */
 const confirmForgotPassword = async (
@@ -655,7 +686,7 @@ const runAll = async (): Promise<void> => {
   }
   console.log(JSON.stringify(resSignup, null, "  "));
 
-  // 管理者による確認コードなしでのサインアップ確認(Confirm)
+  // 管理者による検証コードなしでのサインアップ検証(Confirm)
   console.log(">>> Confirm sign up by administrator");
   const resAdminConfirmSignUp = await adminConfirmSignUp(
     userPool.Id,
