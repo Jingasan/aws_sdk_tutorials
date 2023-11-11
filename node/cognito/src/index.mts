@@ -94,10 +94,6 @@ const createUserPool = async (
       // 更新するために認証が必要な属性
       AttributesRequireVerificationBeforeUpdate: ["email"],
     },
-
-    EmailVerificationSubject: "Verify your email address",
-    //
-    EmailVerificationMessage: "Your verification code is {####}.",
     // 検証メッセージのテンプレート
     VerificationMessageTemplate: {
       // 検証オプション
