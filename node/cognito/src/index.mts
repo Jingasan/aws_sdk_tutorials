@@ -1,4 +1,5 @@
 import * as Cognito from "@aws-sdk/client-cognito-identity-provider";
+import { access } from "fs";
 const cognitoClient = new Cognito.CognitoIdentityProviderClient({
   region: "ap-northeast-1",
 });
@@ -106,15 +107,18 @@ const createUserPool = async (
       // CONFIRM_WITH_LINK:検証用リンク押下による検証
       DefaultEmailOption: Cognito.DefaultEmailOptionType.CONFIRM_WITH_CODE,
       // 検証コード送信メールのタイトル(検証コードによる検証の場合)
-      EmailSubject: "検証コードのご案内",
+      EmailSubject: "ユーザー登録完了",
       // 検証コード送信メールの本文(検証コードによる検証の場合)
-      EmailMessage: "検証コードは{####}です。",
+      EmailMessage:
+        "検証コード「{####}」を入力し、ユーザーを有効化してください。",
       // 検証コード送信メールのタイトル(検証用リンク押下による検証の場合)
-      EmailSubjectByLink: "検証リンクのご案内",
+      EmailSubjectByLink: "ユーザー登録完了",
       // 検証コード送信メールの本文(検証用リンク押下による検証の場合)
-      EmailMessageByLink: "検証リンクは{##verify your email##}です。",
+      EmailMessageByLink:
+        "{##こちら##}の検証リンクを押下し、ユーザーを有効化してください。",
       // 検証コード送信SMSの本文
-      SmsMessage: "検証コードは{####}です。",
+      SmsMessage:
+        "検証コード「{####}」を入力し、ユーザーを有効化してください。",
     },
     // ユーザープールのアドオン設定
     UserPoolAddOns: {
@@ -203,11 +207,11 @@ const createUserPoolClient = async (
       GenerateSecret: false,
       // 許可する認証フロー
       ExplicitAuthFlows: [
-        "ALLOW_ADMIN_USER_PASSWORD_AUTH", // 管理ユーザーパスワードによる認証
+        "ALLOW_ADMIN_USER_PASSWORD_AUTH", // 管理ユーザーによるユーザー名とパスワードでの認証(サーバーサイドで利用)
         "ALLOW_CUSTOM_AUTH", // Lambdaトリガーベースのカスタム認証
         "ALLOW_REFRESH_TOKEN_AUTH", // リフレッシュトークンベースの認証
-        "ALLOW_USER_PASSWORD_AUTH", // ユーザー名とパスワードによる認証
-        "ALLOW_USER_SRP_AUTH", // SRP(セキュアリモートパスワード)プロトコルベースの認証
+        "ALLOW_USER_PASSWORD_AUTH", // ユーザー名とパスワードでの認証
+        "ALLOW_USER_SRP_AUTH", // SRP(セキュアリモートパスワード)プロトコルベースの認証(最もセキュアなため、利用推奨)
       ],
       // 認証フローセッションの持続期間(分)
       AuthSessionValidity: 3,
@@ -361,19 +365,19 @@ const adminConfirmSignUp = async (
 /**
  * ユーザーによるサインアップ検証(Confirm)
  * @param userPoolClientId アプリケーションクライアントのID
- * @param email メールアドレス(ユーザー名として利用)
+ * @param username ユーザー名
  * @param confirmationCode Confirm Code
  * @returns true:成功/false:失敗
  */
 const confirmSignUp = async (
   userPoolClientId: string,
-  email: string,
+  username: string,
   confirmationCode: string
 ): Promise<boolean> => {
   try {
     const command = new Cognito.ConfirmSignUpCommand({
       ClientId: userPoolClientId,
-      Username: email,
+      Username: username,
       ConfirmationCode: confirmationCode,
     });
     await cognitoClient.send(command);
@@ -463,7 +467,7 @@ const adminUpdateUserAttributes = async (
       Username: username,
       UserAttributes: userAttributes,
     });
-    const res = await cognitoClient.send(command);
+    await cognitoClient.send(command);
     return true;
   } catch (err) {
     console.error(err);
@@ -499,6 +503,26 @@ const listUsers = async (userPoolId: string): Promise<Cognito.UserType[]> => {
 
 /**
  * ユーザー情報の取得
+ * @param applicationClientId アプリケーションクライアントID
+ * @returns ユーザー情報/false:取得失敗
+ */
+const getUser = async (
+  applicationClientId: string
+): Promise<Cognito.AdminGetUserCommandOutput | false> => {
+  try {
+    const command = new Cognito.GetUserCommand({
+      AccessToken: applicationClientId,
+    });
+    const res = await cognitoClient.send(command);
+    return res;
+  } catch (err) {
+    console.error((err as Cognito.InternalErrorException).name);
+    return false;
+  }
+};
+
+/**
+ * 管理者によるユーザー情報の取得
  * @param userPoolId ユーザープールID
  * @param username ユーザー名
  * @returns ユーザー情報/false:取得失敗
@@ -522,6 +546,33 @@ const adminGetUser = async (
 
 /**
  * サインイン
+ * @param clientId アプリケーションクライアントID
+ * @param username ユーザー名
+ * @param password パスワード
+ * @returns サインイン結果/false:失敗
+ */
+const initiateAuth = async (
+  clientId: string,
+  username: string,
+  password: string
+): Promise<Cognito.AdminInitiateAuthCommandOutput | false> => {
+  try {
+    const command = new Cognito.InitiateAuthCommand({
+      ClientId: clientId,
+      // ユーザープールの設定でALLOW_USER_PASSWORD_AUTHの有効化が必要
+      AuthFlow: Cognito.AuthFlowType.USER_PASSWORD_AUTH,
+      AuthParameters: { USERNAME: username, PASSWORD: password },
+    });
+    const res = await cognitoClient.send(command);
+    return res;
+  } catch (err) {
+    console.error((err as Cognito.InternalErrorException).name);
+    return false;
+  }
+};
+
+/**
+ * 管理者によるサインイン
  * @param userPoolId ユーザープールID
  * @param clientId アプリケーションクライアントID
  * @param username ユーザー名
@@ -551,9 +602,27 @@ const adminInitiateAuth = async (
 };
 
 /**
- * ログアウト
+ * サインアウト
+ * @param accessToken サインイン中のユーザーのアクセストークン
+ * @returns true:成功/false:失敗
+ */
+const globalSignOut = async (accessToken: string): Promise<boolean> => {
+  try {
+    const command = new Cognito.GlobalSignOutCommand({
+      AccessToken: accessToken,
+    });
+    await cognitoClient.send(command);
+    return true;
+  } catch (err) {
+    console.error((err as Cognito.InternalErrorException).name);
+    return false;
+  }
+};
+
+/**
+ * 管理者によるサインアウト
  * @param userPoolId ユーザープールID
- * @param username ログアウトするユーザー名
+ * @param username サインアウトするユーザー名
  * @returns true:成功/false:失敗
  */
 const adminUserGlobalSignOut = async (
@@ -564,6 +633,32 @@ const adminUserGlobalSignOut = async (
     const command = new Cognito.AdminUserGlobalSignOutCommand({
       UserPoolId: userPoolId,
       Username: username,
+    });
+    await cognitoClient.send(command);
+    return true;
+  } catch (err) {
+    console.error((err as Cognito.InternalErrorException).name);
+    return false;
+  }
+};
+
+/**
+ * パスワード変更
+ * @param previousPassword 現在のパスワード
+ * @param proposedPassword 新規パスワード
+ * @param accessToken アクセストークン
+ * @returns true:成功/false:失敗
+ */
+const changePassword = async (
+  previousPassword: string,
+  proposedPassword: string,
+  accessToken: string
+): Promise<boolean> => {
+  try {
+    const command = new Cognito.ChangePasswordCommand({
+      PreviousPassword: previousPassword,
+      ProposedPassword: proposedPassword,
+      AccessToken: accessToken,
     });
     await cognitoClient.send(command);
     return true;
@@ -599,21 +694,21 @@ const adminResetUserPassword = async (
 /**
  * パスワード忘却時の新しいパスワードの設定と検証(Confirm)
  * @param userPoolId ユーザープールID
- * @param email 削除対象のメールアドレス(ユーザー名として利用)
+ * @param username 対象のユーザー名
  * @param password 新しいパスワード
  * @param confirmationCode 検証コード
  * @returns true:成功/false:失敗
  */
 const confirmForgotPassword = async (
   userPoolClientId: string,
-  email: string,
+  username: string,
   password: string,
   confirmationCode: string
 ): Promise<boolean> => {
   try {
     const command = new Cognito.ConfirmForgotPasswordCommand({
       ClientId: userPoolClientId,
-      Username: email,
+      Username: username,
       Password: password,
       ConfirmationCode: confirmationCode,
     });
@@ -627,6 +722,24 @@ const confirmForgotPassword = async (
 
 /**
  * ユーザーの削除
+ * @param accessToken アクセストークン
+ * @returns true:成功/false:失敗
+ */
+const deleteUser = async (accessToken: string): Promise<boolean> => {
+  try {
+    const command = new Cognito.DeleteUserCommand({
+      AccessToken: accessToken,
+    });
+    await cognitoClient.send(command);
+    return true;
+  } catch (err) {
+    console.error((err as Cognito.InternalErrorException).name);
+    return false;
+  }
+};
+
+/**
+ * 管理者によるユーザーの削除
  * @param userPoolId ユーザープールID
  * @param username 削除対象のユーザー名
  * @returns true:成功/false:失敗
@@ -728,6 +841,52 @@ const runAll = async (): Promise<void> => {
   }
   console.log(resAdminConfirmSignUp);
 
+  // サインイン
+  console.log(">>> SignIn");
+  const resSignIn = await initiateAuth(
+    userPoolClient.ClientId,
+    account[0].username,
+    account[0].password
+  );
+  if (!resSignIn) {
+    console.error("Failed to sign in");
+    return;
+  }
+  console.log(resSignIn);
+
+  // ユーザー情報の取得
+  console.log(">>> Get user");
+  const user1 = await getUser(resSignIn.AuthenticationResult.AccessToken);
+  if (!user1) {
+    console.error("Failed to get user info");
+    return;
+  }
+  console.log(JSON.stringify(user1, null, "  "));
+
+  // パスワード変更
+  console.log(">>> Change password");
+  const resChangePassword = await changePassword(
+    account[0].password,
+    account[0].password,
+    resSignIn.AuthenticationResult.AccessToken
+  );
+  if (!resChangePassword) {
+    console.error("Failed to change password");
+    return;
+  }
+  console.log(resChangePassword);
+
+  // サインアウト
+  console.log(">>> SignOut");
+  const resSignOut = await globalSignOut(
+    resSignIn.AuthenticationResult.AccessToken
+  );
+  if (!resSignOut) {
+    console.error("Failed to sign out");
+    return;
+  }
+  console.log(resSignOut);
+
   // ユーザーの作成
   console.log(">>> Create user");
   const resAdminCreateUser = await adminCreateUser(
@@ -755,6 +914,7 @@ const runAll = async (): Promise<void> => {
   }
   console.log(resAdminSetUserPassword);
 
+  // メール検証
   console.log(">>> Set email verified");
   const resAdminUpdateUserAttributes = await adminUpdateUserAttributes(
     userPool.Id,
@@ -767,45 +927,45 @@ const runAll = async (): Promise<void> => {
   }
   console.log(resAdminUpdateUserAttributes);
 
-  // ユーザー一覧の取得
-  console.log(">>> Get user list");
-  const userList = await listUsers(userPool.Id);
-  console.log(JSON.stringify(userList, null, "  "));
-
-  // ユーザー情報の取得
-  console.log(">>> Get user");
-  const user = await adminGetUser(userPool.Id, account[1].username);
-  if (!user) {
-    console.error("Failed to get user info");
-    return;
-  }
-  console.log(JSON.stringify(user, null, "  "));
-
-  // サインイン
-  console.log(">>> SignIn");
-  const resSignIn = await adminInitiateAuth(
+  // 管理者によるサインイン
+  console.log(">>> Administrator SignIn");
+  const resAdminSignIn = await adminInitiateAuth(
     userPool.Id,
     userPoolClient.ClientId,
     account[1].username,
     account[1].password
   );
-  if (!resSignIn) {
-    console.error("Failed to sign in");
+  if (!resAdminSignIn) {
+    console.error("Failed to sign in by administrator");
     return;
   }
-  console.log(resSignIn);
+  console.log(resAdminSignIn);
 
-  // サインアウト
-  console.log(">>> SignOut");
-  const resSignOut = await adminUserGlobalSignOut(
+  // 管理者によるユーザー情報の取得
+  console.log(">>> Get user by administrator");
+  const user2 = await adminGetUser(userPool.Id, account[1].username);
+  if (!user2) {
+    console.error("Failed to get user info by administrator");
+    return;
+  }
+  console.log(JSON.stringify(user2, null, "  "));
+
+  // 管理者によるサインアウト
+  console.log(">>> AdminSignOut");
+  const resAdminSignOut = await adminUserGlobalSignOut(
     userPool.Id,
     account[1].username
   );
-  if (!resSignOut) {
-    console.error("Failed to sign out");
+  if (!resAdminSignOut) {
+    console.error("Failed to sign out by administrator");
     return;
   }
-  console.log(resSignOut);
+  console.log(resAdminSignOut);
+
+  // ユーザー一覧の取得
+  console.log(">>> Get user list");
+  const userList = await listUsers(userPool.Id);
+  console.log(JSON.stringify(userList, null, "  "));
 
   // ユーザーパスワードのリセット要求：認証コードが記述されたメールが送信される
   console.log(">>> Reset user password");
@@ -819,14 +979,14 @@ const runAll = async (): Promise<void> => {
   }
   console.log(resAdminResetUserPassword);
 
-  // ユーザーの削除
-  console.log(">>> Delete user");
+  // 管理者によるユーザーの削除
+  console.log(">>> Delete user by administrator");
   const resAdminDeleteUser = await adminDeleteUser(
     userPool.Id,
     account[1].username
   );
   if (!resAdminDeleteUser) {
-    console.error("Failed to delete user");
+    console.error("Failed to delete user by administrator");
     return;
   }
   console.log(resAdminDeleteUser);
